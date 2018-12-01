@@ -145,26 +145,27 @@ data ValueCtor a
     -- while the second contains values at the high-address bytes. Thus, the
     -- meaning of this depends on the endianness of the target architecture.
   | ConcatBV (ValueCtor a) (ValueCtor a)
+
   | BVToFloat (ValueCtor a)
   | BVToDouble (ValueCtor a)
   | BVToX86_FP80 (ValueCtor a)
     -- | Cons one value to beginning of array.
   | ConsArray (ValueCtor a) (ValueCtor a)
   | AppendArray (ValueCtor a) (ValueCtor a)
-  | MkArray Type (Vector (ValueCtor a))
-  | MkStruct (Vector (Field Type, ValueCtor a))
+  | MkArray StorageType (Vector (ValueCtor a))
+  | MkStruct (Vector (Field StorageType, ValueCtor a))
   deriving (Functor, Foldable, Traversable, Show)
 
 concatBV :: Bytes -> ValueCtor a -> Bytes -> ValueCtor a -> ValueCtor a
 concatBV _xw x _yw y = ConcatBV x y
 
-singletonArray :: Type -> ValueCtor a -> ValueCtor a
+singletonArray :: StorageType -> ValueCtor a -> ValueCtor a
 singletonArray tp e = MkArray tp (V.singleton e)
 
 -- | Create value of type that splits at a particular byte offset.
-splitTypeValue :: Type   -- ^ Type of value to create
+splitTypeValue :: StorageType   -- ^ Type of value to create
                -> Offset -- ^ Bytes offset to slice type at.
-               -> (Offset -> Type -> ValueCtor a) -- ^ Function for subtypes.
+               -> (Offset -> StorageType -> ValueCtor a) -- ^ Function for subtypes.
                -> ValueCtor a
 splitTypeValue tp d subFn = assert (d > 0) $
   case typeF tp of
@@ -209,10 +210,10 @@ data BasePreference
 -- | A 'RangeLoad' describes different kinds of memory loads in the
 -- context of a byte range copied into an old memory.
 data RangeLoad a b
-  = OutOfRange a Type
+  = OutOfRange a StorageType
     -- ^ Load from an address range disjoint from the copied bytes.
     -- The arguments represent the address and type of the load.
-  | InRange b Type
+  | InRange b StorageType
     -- ^ Load consists of bytes within the copied range. The first
     -- argument represents the offset relative to the start of the
     -- copied bytes.
@@ -228,7 +229,7 @@ adjustOffset inFn _  (InRange b tp) = InRange (inFn b) tp
 -- simple value loads.
 rangeLoad ::
   Addr  {- ^ load offset  -} ->
-  Type  {- ^ load type    -} ->
+  StorageType  {- ^ load type    -} ->
   Range {- ^ copied range -} ->
   ValueCtor (RangeLoad Addr Addr)
 rangeLoad lo ltp s@(R so se)
@@ -242,7 +243,7 @@ rangeLoad lo ltp s@(R so se)
        loadFail = ValueCtorVar (OutOfRange lo ltp)
 
 fixedOffsetRangeLoad :: Addr
-                     -> Type
+                     -> StorageType
                      -> Addr
                      -> Mux (ValueCtor (RangeLoad Addr Addr))
 fixedOffsetRangeLoad l tp s
@@ -277,7 +278,7 @@ fixLoadAfterStoreOffset pref i k = assert (k >= i) $
 -- | @loadFromStoreStart pref tp i j@ loads a value of type @tp@ from a range under the
 -- assumptions that @load + i == store@ and @j = i + min(StoreSize, typeEnd(tp)@.
 loadFromStoreStart :: BasePreference
-                   -> Type
+                   -> StorageType
                    -> Offset
                    -> Offset
                    -> ValueCtor (RangeLoad OffsetExpr IntExpr)
@@ -286,7 +287,7 @@ loadFromStoreStart pref tp i j = adjustOffset inFn outFn <$> rangeLoad 0 tp (R i
         outFn = fixLoadBeforeStoreOffset pref i
 
 fixedSizeRangeLoad :: BasePreference -- ^ Whether addresses are based on store or load.
-                   -> Type
+                   -> StorageType
                    -> Bytes
                    -> Mux (ValueCtor (RangeLoad OffsetExpr IntExpr))
 fixedSizeRangeLoad _ tp 0 = MuxVar (ValueCtorVar (OutOfRange Load tp))
@@ -319,7 +320,7 @@ fixedSizeRangeLoad pref tp ssz =
     loadSucc = MuxVar (ValueCtorVar (InRange (Load .- Store) tp))
     loadFail = MuxVar (ValueCtorVar (OutOfRange Load tp))
 
-symbolicRangeLoad :: BasePreference -> Type -> Mux (ValueCtor (RangeLoad OffsetExpr IntExpr))
+symbolicRangeLoad :: BasePreference -> StorageType -> Mux (ValueCtor (RangeLoad OffsetExpr IntExpr))
 symbolicRangeLoad pref tp =
   Mux (Store .<= Load)
   (Mux (loadOffset sz .<= storeEnd) (loadVal0 sz) (loadIter0 (sz-1)))
@@ -352,7 +353,7 @@ symbolicRangeLoad pref tp =
 
 -- | Represents a projection of a sub-component out of a larger LLVM value.
 data ValueView
-  = ValueViewVar Type
+  = ValueViewVar StorageType
     -- | Select low-address bytes in the bitvector.
     -- The sizes include the number of low bytes, and the number of high bytes.
   | SelectPrefixBV Bytes Bytes ValueView
@@ -362,12 +363,12 @@ data ValueView
   | FloatToBV ValueView
   | DoubleToBV ValueView
   | X86_FP80ToBV ValueView
-  | ArrayElt Word64 Type Word64 ValueView
+  | ArrayElt Word64 StorageType Word64 ValueView
 
-  | FieldVal (Vector (Field Type)) Int ValueView
+  | FieldVal (Vector (Field StorageType)) Int ValueView
   deriving Show
 
-viewType :: ValueView -> Maybe Type
+viewType :: ValueView -> Maybe StorageType
 viewType (ValueViewVar tp) = Just tp
 viewType (SelectPrefixBV u v vv) =
   do tp <- typeF <$> viewType vv
@@ -401,12 +402,12 @@ viewType (FieldVal v i vv) =
 -- | A 'ValueLoad' describes different kinds of memory loads in the
 -- context of a new value stored into an old memory.
 data ValueLoad v
-  = OldMemory v Type
+  = OldMemory v StorageType
     -- ^ Load from an address range disjoint from the stored value.
     -- The arguments represent the address and type of the load.
   | LastStore ValueView
     -- ^ Load consists of valid bytes within the stored value.
-  | InvalidMemory Type
+  | InvalidMemory StorageType
     -- ^ Load touches invalid memory (e.g. trying to read struct padding bytes as a bitvector).
   deriving (Functor,Show)
 
@@ -464,7 +465,7 @@ loadBitvector lo lw so v = do
 -- simple value loads.
 valueLoad ::
   Addr      {- ^ load address         -} ->
-  Type      {- ^ load type            -} ->
+  StorageType {- ^ load type            -} ->
   Addr      {- ^ store address        -} ->
   ValueView {- ^ view of stored value -} ->
   ValueCtor (ValueLoad Addr)
@@ -495,7 +496,7 @@ valueLoad lo ltp so v
 
 symbolicValueLoad ::
   BasePreference {- ^ whether addresses are based on store or load -} ->
-  Type           {- ^ load type            -} ->
+  StorageType    {- ^ load type            -} ->
   ValueView      {- ^ view of stored value -} ->
   Alignment      {- ^ alignment of store and load -} ->
   Mux (ValueCtor (ValueLoad OffsetExpr))
@@ -508,6 +509,8 @@ symbolicValueLoad pref tp v alignment =
     lsz = typeEnd 0 tp
     Just stp = viewType v
 
+    -- prefix table accounts for cases where the load partially overlaps with
+    -- the beginning of the previously-stored value
     prefixTable :: Bytes -> Map Bytes (Mux (ValueCtor (ValueLoad OffsetExpr)))
     prefixTable i
       | i < lsz = Map.insert i
@@ -516,6 +519,8 @@ symbolicValueLoad pref tp v alignment =
       | otherwise = Map.empty
       where adjustFn = fixLoadBeforeStoreOffset pref i
 
+    -- suffix table accounts for cases where the load address occurs at a position
+    -- equal-to or after the address of the previous store
     suffixTable :: Bytes -> Map Bytes (Mux (ValueCtor (ValueLoad OffsetExpr)))
     suffixTable i
       | i < typeSize stp =
@@ -528,7 +533,7 @@ symbolicValueLoad pref tp v alignment =
     loadFail = MuxVar (ValueCtorVar (OldMemory Load tp))
 
 -- | Create a value of the given type made up of copies of the given byte.
-memsetValue :: a -> Type -> ValueCtor a
+memsetValue :: a -> StorageType -> ValueCtor a
 memsetValue byte = go
   where
     val = ValueCtorVar byte

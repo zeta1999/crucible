@@ -19,8 +19,8 @@
 
 module Lang.Crucible.LLVM.MemModel.Type
   ( -- * Storable types
-    Type(..)
-  , TypeF(..)
+    StorageType(..)
+  , StorageTypeF(..)
   , bitvectorType
   , floatType
   , doubleType
@@ -28,14 +28,13 @@ module Lang.Crucible.LLVM.MemModel.Type
   , arrayType
   , structType
   , mkStructType
-  , mkType
+  , mkStorageType
   , typeEnd
   , Field
   , fieldVal
   , fieldPad
   , fieldOffset
   , mkField
-
   )  where
 
 import Control.Exception (assert)
@@ -62,7 +61,7 @@ fieldVal = lens _fieldVal (\s v -> s { _fieldVal = v })
 mkField :: Offset -> v -> Bytes -> Field v
 mkField = Field
 
-data TypeF v
+data StorageTypeF v
   = Bitvector Bytes -- ^ Size of bitvector in bytes (must be > 0).
   | Float
   | Double
@@ -73,14 +72,14 @@ data TypeF v
 
 -- | Represents the storage type of an LLVM value. A 'Type' specifies
 -- how a value is represented as bytes in memory.
-data Type =
-  Type
-  { typeF :: TypeF Type
+data StorageType =
+  StorageType
+  { typeF :: StorageTypeF StorageType
   , typeSize :: Bytes
   }
   deriving (Eq, Ord, Typeable)
 
-instance Show Type where
+instance Show StorageType where
   showsPrec p t = showParen (p >= 10) $
     case typeF t of
       Bitvector w -> showString "bitvectorType " . shows w
@@ -91,8 +90,8 @@ instance Show Type where
       Struct v -> showString "mkStructType " . shows (V.toList (fldFn <$> v))
         where fldFn f = (f^.fieldVal, fieldPad f)
 
-mkType :: TypeF Type -> Type
-mkType tf = Type tf $
+mkStorageType :: StorageTypeF StorageType -> StorageType
+mkStorageType tf = StorageType tf $
   case tf of
     Bitvector w -> w
     Float -> 4
@@ -101,26 +100,26 @@ mkType tf = Type tf $
     Array n e -> (Bytes n) * typeSize e
     Struct flds -> assert (V.length flds > 0) (fieldEnd (V.last flds))
 
-bitvectorType :: Bytes -> Type
-bitvectorType w = Type (Bitvector w) w
+bitvectorType :: Bytes -> StorageType
+bitvectorType w = mkStorageType (Bitvector w)
 
-floatType :: Type
-floatType = mkType Float
+floatType :: StorageType
+floatType = mkStorageType Float
 
-doubleType :: Type
-doubleType = mkType Double
+doubleType :: StorageType
+doubleType = mkStorageType Double
 
-x86_fp80Type :: Type
-x86_fp80Type = mkType X86_FP80
+x86_fp80Type :: StorageType
+x86_fp80Type = mkStorageType X86_FP80
 
-arrayType :: Word64 -> Type -> Type
-arrayType n e = Type (Array n e) ((Bytes n) * typeSize e)
+arrayType :: Word64 -> StorageType -> StorageType
+arrayType n e = StorageType (Array n e) ((Bytes n) * typeSize e)
 
-structType :: V.Vector (Field Type) -> Type
+structType :: V.Vector (Field StorageType) -> StorageType
 structType flds = assert (V.length flds > 0) $
-  Type (Struct flds) (fieldEnd (V.last flds))
+  StorageType (Struct flds) (fieldEnd (V.last flds))
 
-mkStructType :: V.Vector (Type, Bytes) -> Type
+mkStructType :: V.Vector (StorageType, Bytes) -> StorageType
 mkStructType l = structType (evalState (traverse fldFn l) 0)
   where
     fldFn (tp,p) =
@@ -132,7 +131,7 @@ mkStructType l = structType (evalState (traverse fldFn l) 0)
                       }
 
 -- | Returns end of actual type bytes (excluded padding from structs).
-typeEnd :: Addr -> Type -> Addr
+typeEnd :: Addr -> StorageType -> Addr
 typeEnd a tp = seq a $
   case typeF tp of
     Bitvector w -> a + w
@@ -144,5 +143,5 @@ typeEnd a tp = seq a $
       where f = V.last flds
 
 -- | Returns end of field including padding bytes.
-fieldEnd :: Field Type -> Bytes
+fieldEnd :: Field StorageType -> Bytes
 fieldEnd f = fieldOffset f + typeSize (f^.fieldVal) + fieldPad f
