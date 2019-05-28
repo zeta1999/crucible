@@ -1,7 +1,7 @@
-#include <stdint.h>
-void __VERIFIER_assert(uint32_t b);
+#include <svcomp.h>
 
 void f () {
+  while (1);
   __VERIFIER_assert(0);
 }
 

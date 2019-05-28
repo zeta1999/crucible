@@ -1,5 +1,5 @@
 CLANG=clang
-CFLAGS=-O1 -Wall
+CFLAGS=-O1 -Wall -I../../crux-llvm/c-src/includes
 
 .PHONY: all clean
 
