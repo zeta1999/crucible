@@ -17,7 +17,8 @@ import Lang.Crucible.Backend.Online
           , Flags, FloatIEEE
           )
 import Lang.Crucible.Backend(IsSymInterface)
-import Lang.Crucible.CFG.Core(AnyCFG(..),cfgArgTypes,cfgReturnType)
+import Lang.Crucible.CFG.Core(AnyCFG(..),cfgArgTypes,cfgReturnType
+                             , cfgEntryBlockID, ppCFG )
 import Lang.Crucible.Simulator
 
 import Lang.Crucible.LLVM.Translation
@@ -27,6 +28,7 @@ import Crux.LLVM.Overrides
 import Crux.Model
 
 import Print
+import Loop
 
 test_file :: FilePath
 test_file = "crucible-mc/test/example.bc"
@@ -44,20 +46,28 @@ main =
   case findCFG mt test_fun of
     Nothing -> throwIO (UnknownFunction test_fun)
     Just (AnyCFG cfg) ->
-      case (cfgArgTypes cfg, cfgReturnType cfg) of
-        (Empty, UnitRepr) ->
-          pure Setup
-            { cruxOutput = stdout
-            , cruxBackend = sym
-            , cruxInitCodeReturns = UnitRepr
-            , cruxInitCode = do setupOverrides (mt ^. transContext)
-                                _ <- callCFG cfg emptyRegMap
-                                pure ()
-            , cruxUserState = emptyModel
-            , cruxGo  = runFrom
-            }
+      do putStrLn ("Entry point: " ++ show (cfgEntryBlockID cfg))
+         print (ppCFG False cfg)
+         let file = "out.dot"
+         saveGraph file cfg
+         putStrLn ("CFG save to " ++ show file)
+         putStrLn "-- SCCS: ----------"
+         putStrLn (see cfg)
 
-        _ -> throwIO (UnsupportedFunType test_fun)
+         case (cfgArgTypes cfg, cfgReturnType cfg) of
+           (Empty, UnitRepr) ->
+             pure Setup
+               { cruxOutput = stdout
+               , cruxBackend = sym
+               , cruxInitCodeReturns = UnitRepr
+               , cruxInitCode = do setupOverrides (mt ^. transContext)
+                                   _ <- callCFG cfg emptyRegMap
+                                   pure ()
+               , cruxUserState = emptyModel
+               , cruxGo  = runFrom
+               }
+
+           _ -> throwIO (UnsupportedFunType test_fun)
 
 runFrom :: (IsSymInterface sym, HasPtrWidth (ArchWidth arch)) =>
             ExecState p sym (LLVM arch) rtp ->  IO ()
