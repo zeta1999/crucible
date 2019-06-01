@@ -17,6 +17,7 @@ import Lang.Crucible.Backend.Online
           , Flags, FloatIEEE
           )
 import Lang.Crucible.Backend(IsSymInterface)
+import Lang.Crucible.CFG.Dot(cfgSaveDot)
 import Lang.Crucible.CFG.Core(AnyCFG(..),cfgArgTypes,cfgReturnType
                              , cfgEntryBlockID, ppCFG )
 import Lang.Crucible.Simulator
@@ -28,7 +29,6 @@ import Crux.LLVM.Overrides
 import Crux.Model
 
 import Print
-import Loop
 
 test_file :: FilePath
 test_file = "crucible-mc/test/example.bc"
@@ -49,10 +49,8 @@ main =
       do putStrLn ("Entry point: " ++ show (cfgEntryBlockID cfg))
          print (ppCFG False cfg)
          let file = "out.dot"
-         saveGraph file cfg
+         cfgSaveDot file cfg
          putStrLn ("CFG save to " ++ show file)
-         putStrLn "-- SCCS: ----------"
-         putStrLn (see cfg)
 
          case (cfgArgTypes cfg, cfgReturnType cfg) of
            (Empty, UnitRepr) ->

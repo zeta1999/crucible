@@ -14,7 +14,7 @@ extra-source-files:  CHANGELOG.md
 
 executable crucible-mc
   main-is:             Main.hs
-  other-modules: Print, Loop
+  other-modules: Print, Sim
   build-depends:
     base >= 4.11.0 && < 5.0 ,
     lens,
@@ -25,6 +25,7 @@ executable crucible-mc
     crucible-llvm,
     crux,
     crux-llvm,
+    what4,
     pretty
   hs-source-dirs:      exe
   default-language:    Haskell2010
