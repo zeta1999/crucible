@@ -37,6 +37,9 @@ module Lang.Crucible.Simulator.EvalStmt
   , evalJumpTarget
   , evalSwitchTarget
   , stepStmt
+  , stepStmt'
+  , Step(..)
+  , stepCont
   , stepTerm
   , stepBasicBlock
   , readRef
@@ -193,27 +196,57 @@ readRef sym iTypes tpr rs globs =
      let msg = ReadBeforeWriteSimError "Attempted to read uninitialized reference cell"
      readPartExpr sym pv msg
 
+-- | A single step of a basic block.
+data Step p sym ext rtp blocks r ctx ctx' =
+
+    -- | We made a single step, and this is the next state.
+    LocalStep (CrucibleState p sym ext rtp blocks r ctx')
+
+    -- | We got to a function call site, and this is the info for calling it.
+  | forall fargs fres. (ctx' ~ (ctx ::> fres)) =>
+    CallFun (FnVal sym fargs fres)      -- function
+            (RegMap sym fargs)          -- arguments
+            (TypeRepr fres)             -- type of restul
+            (StmtSeq ext blocks r ctx') -- block statemnts after function
+
+
+{-# INLINE stepCont #-}
+-- | Convert a step into an execution continuation.
+stepCont ::
+  (IsSymInterface sym, IsSyntaxExtension ext) =>
+  Int {- ^ Verbosity -} ->
+  Step p sym ext rtp blocks r ctx ctx' ->
+  ExecCont p sym ext rtp (CrucibleLang blocks r) ('Just ctx)
+stepCont verb next =
+  case next of
+    LocalStep s1      -> withReaderT (const s1) (checkConsTerm verb)
+    CallFun f as rt k -> callFunction f as (ReturnToCrucible rt k)
+
+
 
 -- | Evaluation operation for evaluating a single straight-line
 --   statement of the Crucible evaluator.
 --
 --   This is allowed to throw user exceptions or 'SimError'.
-stepStmt :: forall p sym ext rtp blocks r ctx ctx'.
+stepStmt' :: forall p sym ext rtp blocks r ctx ctx'.
   (IsSymInterface sym, IsSyntaxExtension ext) =>
   Int {- ^ Current verbosity -} ->
   Stmt ext ctx ctx' {- ^ Statement to evaluate -} ->
   StmtSeq ext blocks r ctx' {- ^ Remaning statements in the block -} ->
-  ExecCont p sym ext rtp (CrucibleLang blocks r) ('Just ctx)
-stepStmt verb stmt rest =
+  ReaderT (CrucibleState p sym ext rtp blocks r ctx) IO
+          (Step p sym ext rtp blocks r ctx ctx')
+stepStmt' verb stmt rest =
   do ctx <- view stateContext
      let sym = ctx^.ctxSymInterface
      let iTypes = ctxIntrinsicTypes ctx
      globals <- view (stateTree.actFrame.gpGlobals)
 
-     let continueWith :: forall rtp' blocks' r' c f a.
-           (SimState p sym ext rtp' f a -> SimState p sym ext rtp' (CrucibleLang blocks' r') ('Just c)) ->
-           ExecCont p sym ext rtp' f a
-         continueWith f = withReaderT f (checkConsTerm verb)
+     let continueWith ::
+           (CrucibleState p sym ext rtp blocks r ctx ->
+            CrucibleState p sym ext rtp blocks r ctx') ->
+            ReaderT (CrucibleState p sym ext rtp blocks r ctx) IO
+                    (Step p sym ext rtp blocks r ctx ctx')
+         continueWith f = withReaderT f (asks LocalStep)
 
      case stmt of
        NewRefCell tpr x ->
@@ -292,7 +325,7 @@ stepStmt verb stmt rest =
        CallHandle ret_type fnExpr _types arg_exprs ->
          do hndl <- evalReg fnExpr
             args <- evalArgs arg_exprs
-            callFunction hndl args (ReturnToCrucible ret_type rest)
+            pure (CallFun hndl args ret_type rest)
 
        Print e ->
          do msg <- evalReg e
@@ -324,6 +357,22 @@ stepStmt verb stmt rest =
               do loc <- getCurrentProgramLoc sym
                  addAssumption sym (LabeledPred c (AssumptionReason loc msg'))
             continueWith (stateCrucibleFrame  . frameStmts .~ rest)
+
+
+
+
+-- | Evaluation operation for evaluating a single straight-line
+--   statement of the Crucible evaluator.
+--
+--   This is allowed to throw user exceptions or 'SimError'.
+stepStmt ::
+  (IsSymInterface sym, IsSyntaxExtension ext) =>
+  Int {- ^ Current verbosity -} ->
+  Stmt ext ctx ctx' {- ^ Statement to evaluate -} ->
+  StmtSeq ext blocks r ctx' {- ^ Remaning statements in the block -} ->
+  ExecCont p sym ext rtp (CrucibleLang blocks r) ('Just ctx)
+stepStmt verb stmt rest = stepCont verb =<< stepStmt' verb stmt rest
+
 
 
 {-# INLINABLE stepTerm #-}

@@ -40,6 +40,7 @@ module Lang.Crucible.CFG.Core
   , cfgArgTypes
   , cfgReturnType
   , CFGPostdom
+  , emptyCFGPostdomInfo
 
     -- * Blocks
   , BlockMap
