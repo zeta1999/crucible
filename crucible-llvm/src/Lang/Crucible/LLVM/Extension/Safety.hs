@@ -21,7 +21,7 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Lang.Crucible.LLVM.Extension.Safety
-  ( LLVMSafetyAssertion
+  ( LLVMSafetyAssertion(..)
   , BadBehavior(..)
   , LLVMAssertionTree
   , undefinedBehavior
