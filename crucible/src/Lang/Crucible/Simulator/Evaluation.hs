@@ -683,7 +683,7 @@ evalApp sym itefns _logFn evalExt (evalSub :: forall tp. f tp -> IO (RegValue sy
     BVUndef w ->
       freshConstant sym emptySymbol (BaseBVRepr w)
 
-    BVLit w x -> bvLit sym w (BV.mkBV w x)
+    BVLit w bv -> bvLit sym w bv
 
     BVConcat _ _ xe ye -> do
       x <- evalSub xe
