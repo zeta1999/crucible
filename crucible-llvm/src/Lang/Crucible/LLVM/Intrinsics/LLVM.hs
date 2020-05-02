@@ -34,6 +34,7 @@ import           Data.Bits ((.&.))
 import qualified Data.Vector as V
 import qualified Text.LLVM.AST as L
 
+import qualified Data.BitVector.Sized as BV
 import qualified Data.Parameterized.Context as Ctx
 import           Data.Parameterized.Context ( pattern (:>), pattern Empty )
 
@@ -541,7 +542,7 @@ callX86_pclmulqdq sym _mvar
           liftIO $ addFailedAssertion sym $ AssertFailureSimError
            ("Vector length mismatch in llvm.x86.pclmulqdq intrinsic")
            (unwords ["Expected <2 x i64>, but got vector of length", show (V.length ys)])
-       case asUnsignedBV imm of
+       case BV.asUnsigned <$> asBV imm of
          Just byte ->
            do let xidx = if byte .&. 0x01 == 0 then 0 else 1
               let yidx = if byte .&. 0x10 == 0 then 0 else 1
@@ -620,7 +621,7 @@ callObjectsize sym _mvar w
     -- through compilation for us to see, that means the compiler could not
     -- determine the value.
     t <- bvIsNonzero sym flag
-    z <- bvLit sym w 0
+    z <- bvLit sym w (BV.zero w)
     n <- bvNotBits sym z -- NB: -1 is the boolean negation of zero
     bvIte sym t z n
 
