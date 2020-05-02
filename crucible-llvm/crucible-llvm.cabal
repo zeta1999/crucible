@@ -105,6 +105,7 @@ test-suite crucible-llvm-tests
   -- other-modules:
   build-depends:
     base,
+    bv-sized,
     containers,
     crucible,
     crucible-llvm,
