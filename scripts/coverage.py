@@ -1,22 +1,24 @@
 import json
 import sys
 
-j = json.load(sys.stdin)
-
 branches = {}
 visited = set()
 
-for x in j:
-    if x['type'] != 'callgraph':
-        continue
-    for evt in x['events']:
-        if evt['type'] == 'BRANCH':
-            k = (evt['function'], evt['callsite'], tuple(evt['blocks']))
-            branches[k] = evt
-        elif evt['type'] == 'BLOCK':
-            func = evt['function']
-            for b in evt['blocks']:
-                visited.add((func, b))
+for fn in sys.argv[1:]:
+    with open(fn) as f:
+        j = json.load(f)
+
+    for x in j:
+        if x['type'] != 'callgraph':
+            continue
+        for evt in x['events']:
+            if evt['type'] == 'BRANCH':
+                k = (evt['function'], evt['callsite'], tuple(evt['blocks']))
+                branches[k] = evt
+            elif evt['type'] == 'BLOCK':
+                func = evt['function']
+                for b in evt['blocks']:
+                    visited.add((func, b))
 
 for evt in branches.values():
     func = evt['function']
