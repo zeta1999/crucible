@@ -15,6 +15,7 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ViewPatterns #-}
@@ -1066,23 +1067,48 @@ evaluateExpr sym sc cache = f []
                              scIte sym sc range p x' fb
                     foldM upd fallback (Map.assocs m)
 
-        B.ConstantArray indexTypes _range v ->
-          makeArray sym sc indexTypes env $ \env' _ -> eval env' v
+        B.ConstantArray indexTypes range v
+          | Ctx.Empty Ctx.:> idx_type <- indexTypes -> do
+            sc_idx_type <- baseSCType sym sc idx_type
+            sc_elm_type <- baseSCType sym sc range
+            sc_elm <- f env v
+            SAWExpr <$> SC.scArrayConstant sc sc_idx_type sc_elm_type sc_elm
+          | otherwise ->
+            makeArray sym sc indexTypes env $ \env' _ -> eval env' v
 
-        B.SelectArray _ arr indexTerms ->
-          do arr' <- eval env arr
-             xs <- traverseFC (eval env) indexTerms
-             applyArray sym sc arr' xs
+        B.SelectArray range arr indexTerms
+          | Ctx.Empty Ctx.:> idx <- indexTerms
+          , idx_type <- exprType idx -> do
+            sc_idx_type <- baseSCType sym sc idx_type
+            sc_elm_type <- baseSCType sym sc range
+            sc_arr <- f env arr
+            sc_idx <- f env idx
+            SAWExpr <$>
+              SC.scArrayLookup sc sc_idx_type sc_elm_type sc_arr sc_idx
+          | otherwise ->
+            do arr' <- eval env arr
+               xs <- traverseFC (eval env) indexTerms
+               applyArray sym sc arr' xs
 
 
-        B.UpdateArray range indexTypes arr indexTerms v ->
-          makeArray sym sc indexTypes env $ \env' vars ->
-          do idxs <- traverseFC (eval env) indexTerms
-             p <- scAllEq sym sc indexTypes vars idxs
-             v' <- eval env' v
-             arr' <- eval env' arr
-             x <- applyArray sym sc arr' vars
-             scIte sym sc range p v' x
+        B.UpdateArray range indexTypes arr indexTerms v
+          | Ctx.Empty Ctx.:> idx <- indexTerms
+          , idx_type <- exprType idx -> do
+            sc_idx_type <- baseSCType sym sc idx_type
+            sc_elm_type <- baseSCType sym sc range
+            sc_arr <- f env arr
+            sc_idx <- f env idx
+            sc_elm <- f env v
+            SAWExpr <$>
+              SC.scArrayUpdate sc sc_idx_type sc_elm_type sc_arr sc_idx sc_elm
+          | otherwise ->
+            makeArray sym sc indexTypes env $ \env' vars ->
+            do idxs <- traverseFC (eval env) indexTerms
+               p <- scAllEq sym sc indexTypes vars idxs
+               v' <- eval env' v
+               arr' <- eval env' arr
+               x <- applyArray sym sc arr' vars
+               scIte sym sc range p v' x
 
         B.NatToInteger x -> NatToIntSAWExpr <$> eval env x
         B.IntegerToNat x ->
