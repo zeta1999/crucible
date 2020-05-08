@@ -20,8 +20,8 @@ import System.Process
   ( readProcess, readProcessWithExitCode )
 
 import What4.Interface
-import What4.ProgramLoc
 
+import Lang.Crucible.ProgramLoc
 import Lang.Crucible.Simulator.SimError
 
 import Crux

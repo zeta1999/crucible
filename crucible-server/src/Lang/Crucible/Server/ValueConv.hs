@@ -55,7 +55,6 @@ import           Lang.Crucible.FunctionHandle
 import           Lang.Crucible.Server.Simulator
 import           Lang.Crucible.Server.TypeConv
 import           Lang.Crucible.Types
-import           Lang.Crucible.Simulator.CallFrame (SomeHandle(..))
 
 
 toByteString :: Builder -> BS.ByteString
