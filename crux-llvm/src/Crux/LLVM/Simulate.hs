@@ -30,7 +30,7 @@ import Lang.Crucible.Types
 import Lang.Crucible.CFG.Core(AnyCFG(..), cfgArgTypes)
 import Lang.Crucible.FunctionHandle(newHandleAllocator,HandleAllocator)
 import Lang.Crucible.Simulator
-  ( emptyRegMap, regValue
+  ( emptyRegMap
   , fnBindingsFromList, runOverrideSim, callCFG
   , initSimContext, profilingMetrics
   , ExecState( InitialState )
@@ -152,7 +152,7 @@ checkFun nm mp =
       case cfgArgTypes anyCfg of
         Empty ->
           do liftIO $ say "Crux" ("Simulating function " ++ show nm)
-             (regValue <$> callCFG anyCfg emptyRegMap) >> return ()
+             (callCFG anyCfg emptyRegMap) >> return ()
         _     -> throwCError BadFun
     Nothing -> throwCError (MissingFun nm)
 
