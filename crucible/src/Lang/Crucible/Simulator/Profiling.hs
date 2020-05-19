@@ -202,9 +202,7 @@ callGraphJSON now m evs = JSObject $ toJSObject
 symProUIString :: String -> String -> ProfilingTable -> IO String
 symProUIString nm source tbl =
   do js <- symProUIJSON nm source tbl
-     -- FIXME
-     --return ("data.receiveData("++ encode js ++ ");")
-     return (encode js)
+     return ("data.receiveData("++ encode js ++ ");")
 
 
 symProUIJSON :: String -> String -> ProfilingTable -> IO JSValue
@@ -273,7 +271,6 @@ openEventFrames = go []
    case cgEvent_type e of
      ENTER -> go (e:xs) es
      EXIT  -> go (tail xs) es
-     -- TODO: is this correct?  not sure what this function is supposed to do
      _     -> go xs es
 
 openToCloseEvent :: UTCTime -> Metrics Identity -> CGEvent -> CGEvent
@@ -458,11 +455,10 @@ updateProfilingTable tbl exst = do
     RunningState (RunBlockEnd _) st ->
       let funcName = st^.stateTree.actFrame.gpValue.frameFunctionName in
       case st^.stateTree.actFrame.gpValue.crucibleSimFrame.frameStmts of
-        TermStmt loc (Br _ x y) -> do
-          branchEvent tbl funcName (Just loc) [jumpTargetID x, jumpTargetID y]
-        TermStmt loc (MaybeBranch _ _ x y) -> do
-          branchEvent tbl funcName (Just loc) [switchTargetID x, jumpTargetID y]
-        -- TODO: VariantElim
+        TermStmt loc term
+          | Just blocks <- termStmtNextBlocks term,
+            length blocks >= 2 ->
+              branchEvent tbl funcName (Just loc) blocks
         _ -> return ()
     _ -> return ()
 

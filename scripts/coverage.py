@@ -3,7 +3,15 @@ import json
 import sys
 
 assert len(sys.argv) > 1, 'expected at least one input file'
-js = [json.load(open(fn)) for fn in sys.argv[1:]]
+
+def read_json(filename):
+    with open(filename, 'rb') as f:
+        buf = f.read()
+        start = buf.index(b'(')
+        end = buf.rindex(b')')
+        return json.loads(buf[start + 1 : end])
+
+js = [read_json(fn) for fn in sys.argv[1:]]
 
 # Collect all events
 evts = []
