@@ -28,7 +28,7 @@ library
     ansi-terminal,
     ansi-wl-pprint,
     bytestring,
-    base >= 4.8 && < 4.14,
+    base >= 4.8 && < 4.15,
     bv-sized,
     config-schema,
     containers,
@@ -61,7 +61,7 @@ executable crux-llvm
   build-depends:
     ansi-terminal,
     ansi-wl-pprint,
-    base >= 4.8 && < 4.14,
+    base >= 4.8 && < 4.15,
     bytestring,
     containers,
     crucible,
@@ -98,9 +98,12 @@ executable crux-llvm-svcomp
   main-is: Main.hs
 
   build-depends:
+    aeson >= 1.4.7,
+    attoparsec >= 0.13,
+    async >= 2.2,
     ansi-terminal,
     ansi-wl-pprint,
-    base >= 4.8 && < 4.14,
+    base >= 4.8 && < 4.15,
     bytestring,
     containers,
     crucible,

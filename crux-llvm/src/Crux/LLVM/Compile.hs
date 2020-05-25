@@ -9,7 +9,7 @@ import qualified Data.Binary.IEEE754 as IEEE754
 import qualified Data.BitVector.Sized as BV
 import qualified Data.Foldable as Fold
 import Data.List
-  ( intercalate )
+  ( intercalate, isSuffixOf )
 import qualified Data.Parameterized.Map as MapF
 import System.Directory
   ( doesFileExist, removeFile, createDirectoryIfMissing )
@@ -113,7 +113,8 @@ genBitCode cruxOpts llvmOpts =
 
      finalBCExists <- doesFileExist finalBCFile
      unless (finalBCExists && lazyCompile llvmOpts) $
-      do forM_ srcBCNames $ \f -> runClang llvmOpts (params f)
+      do forM_ srcBCNames $ \f@(src,_) ->
+           unless (".bc" `isSuffixOf` src) (runClang llvmOpts (params f))
          ver <- llvmLinkVersion llvmOpts
          let libcxxBitcode | anyCPPFiles files = [libDir llvmOpts </> "libcxx-" ++ ver ++ ".bc"]
                            | otherwise = []
